@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{self, BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use structopt::StructOpt;
 
@@ -10,7 +10,12 @@ struct Opt {
     #[structopt(name = "FILE", parse(from_os_str))]
     files: Vec<std::path::PathBuf>,
 
-    #[structopt(short = "e", long, default_value = "cl100k_base", help = "Encoding model (cl100k_base|p50k_base|p50k_edit|r50k_base)")]
+    #[structopt(
+        short = "e",
+        long,
+        default_value = "cl100k_base",
+        help = "Encoding model (cl100k_base|p50k_base|p50k_edit|r50k_base)"
+    )]
     encoding: String,
 }
 
@@ -27,55 +32,57 @@ fn get_encoder(encoding: &str) -> tiktoken_rs::CoreBPE {
     }
 }
 
-fn token_count(content: &str, encoder: &tiktoken_rs::CoreBPE) -> usize {
-    let tokens = encoder.encode_with_special_tokens(content);
-    tokens.len()
+fn count_tokens(content: &str, encoder: &tiktoken_rs::CoreBPE) -> usize {
+    encoder.encode_with_special_tokens(content).len()
 }
 
 fn main() -> io::Result<()> {
     let opt = Opt::from_args();
     let encoder = get_encoder(&opt.encoding);
-    let mut total = 0;
-    let mut file_count = 0;
 
     if opt.files.is_empty() {
-        let mut bytes = Vec::new();
-        io::stdin().read_to_end(&mut bytes)?;
-        let content = String::from_utf8_lossy(&bytes);
-        let count = token_count(&content, &encoder);
+        let tokens = read_from_stdin()?;
+        let count = count_tokens(&tokens, &encoder);
         println!("{}", count);
     } else {
-        for filename in &opt.files {
-            let path = Path::new(&filename);
-            let file = match File::open(&path) {
-                Err(why) => {
-                    eprintln!("ttc: {}", why);
-                    continue;
-                }
-                Ok(file) => file,
-            };
-
-            let mut buf_reader = BufReader::new(file);
-            let mut bytes = Vec::new();
-            match buf_reader.read_to_end(&mut bytes) {
-                Err(why) => {
-                    eprintln!("ttc: {}: {}", filename.display(), why);
-                    continue;
-                }
-                Ok(_) => (),
-            };
-            let content = String::from_utf8_lossy(&bytes);
-
-            let count = token_count(&content, &encoder);
-            println!("{:8} {}", count, filename.display());
-            total += count;
-            file_count += 1;
-        }
-
-        if file_count > 1 {
-            println!("{:8} total", total);
-        }
+        count_tokens_in_files(&opt.files, &encoder);
     }
 
     Ok(())
 }
+
+fn read_from_stdin() -> io::Result<String> {
+    let mut content = String::new();
+    io::stdin().read_to_string(&mut content)?;
+    Ok(content)
+}
+
+fn count_tokens_in_files(file_paths: &[PathBuf], encoder: &tiktoken_rs::CoreBPE) { // argument changed
+    let mut total = 0;
+    let mut file_count = 0;
+
+    for path in file_paths {
+        match read_file(&path) {
+            Ok(content) => {
+                let count = count_tokens(&content, &encoder);
+                println!("{:8} {}", count, path.display());
+                total += count;
+                file_count += 1;
+            },
+            Err(e) => eprintln!("Failed to read file {}: {}", path.display(), e),
+        }
+    }
+   
+    if file_count > 1 {
+        println!("{:8} total", total);
+    }
+}
+
+fn read_file(path: &Path) -> io::Result<String> {
+    let file = File::open(&path)?;
+    let mut buf_reader = BufReader::new(file);
+    let mut content = String::new();
+    buf_reader.read_to_string(&mut content)?;
+    Ok(content)
+}
+
