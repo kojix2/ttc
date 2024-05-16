@@ -2,6 +2,10 @@
 
 `ttc` is a unix command line tool to counts the number of tokens for AI models.
 
+## Dependency
+
+- [tiktoken-rs](https://github.com/zurawiki/tiktoken-rs)
+
 ## Supported Encodings
 
 | Encoding name           | OpenAI models                                                             |
