@@ -14,7 +14,7 @@ struct Opt {
         short = "e",
         long,
         default_value = "cl100k_base",
-        help = "Encoding model (cl100k_base|p50k_base|p50k_edit|r50k_base)"
+        help = "Encoding model (o200k_base|cl100k_base|p50k_base|p50k_edit|r50k_base)"
     )]
     encoding: String,
 }
@@ -22,6 +22,7 @@ struct Opt {
 // Get the encoder based on the encoding model name
 fn get_encoder(encoding: &str) -> tiktoken_rs::CoreBPE {
     match encoding {
+        "o200k_base" => tiktoken_rs::o200k_base().unwrap(),
         "cl100k_base" => tiktoken_rs::cl100k_base().unwrap(),
         "p50k_base" => tiktoken_rs::p50k_base().unwrap(),
         "p50k_edit" => tiktoken_rs::p50k_edit().unwrap(),
