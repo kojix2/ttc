@@ -8,7 +8,7 @@ use structopt::StructOpt;
 #[structopt(name = "token-counter", about = "Count tokens in files.")]
 struct Opt {
     #[structopt(name = "FILE", parse(from_os_str))]
-    files: Vec<std::path::PathBuf>,
+    files: Vec<PathBuf>,
 
     #[structopt(
         short = "e",
@@ -19,6 +19,7 @@ struct Opt {
     encoding: String,
 }
 
+// Get the encoder based on the encoding model name
 fn get_encoder(encoding: &str) -> tiktoken_rs::CoreBPE {
     match encoding {
         "cl100k_base" => tiktoken_rs::cl100k_base().unwrap(),
@@ -26,12 +27,13 @@ fn get_encoder(encoding: &str) -> tiktoken_rs::CoreBPE {
         "p50k_edit" => tiktoken_rs::p50k_edit().unwrap(),
         "r50k_base" | "gpt2" => tiktoken_rs::r50k_base().unwrap(),
         _ => {
-            eprintln!("ttc: invalid encoding name");
+            eprintln!("Error: invalid encoding name");
             process::exit(1);
         }
     }
 }
 
+// Count the number of tokens in the given content
 fn count_tokens(content: &str, encoder: &tiktoken_rs::CoreBPE) -> usize {
     encoder.encode_with_special_tokens(content).len()
 }
@@ -41,43 +43,49 @@ fn main() -> io::Result<()> {
     let encoder = get_encoder(&opt.encoding);
 
     if opt.files.is_empty() {
-        let tokens = read_from_stdin()?;
-        let count = count_tokens(&tokens, &encoder);
-        println!("{}", count);
+        // If no files are provided, read from stdin
+        let stdin_content = read_from_stdin()?;
+        let token_count = count_tokens(&stdin_content, &encoder);
+        println!("{}", token_count);
     } else {
+        // If files are provided, count tokens in each file
         count_tokens_in_files(&opt.files, &encoder);
     }
 
     Ok(())
 }
 
+// Read content from standard input
 fn read_from_stdin() -> io::Result<String> {
     let mut content = String::new();
     io::stdin().read_to_string(&mut content)?;
     Ok(content)
 }
 
-fn count_tokens_in_files(file_paths: &[PathBuf], encoder: &tiktoken_rs::CoreBPE) { // argument changed
-    let mut total = 0;
+// Count tokens in each file and print the results
+fn count_tokens_in_files(file_paths: &[PathBuf], encoder: &tiktoken_rs::CoreBPE) {
+    let mut total_tokens = 0;
     let mut file_count = 0;
 
     for path in file_paths {
         match read_file(&path) {
             Ok(content) => {
-                let count = count_tokens(&content, &encoder);
-                println!("{:8} {}", count, path.display());
-                total += count;
+                let token_count = count_tokens(&content, &encoder);
+                println!("{:8} {}", token_count, path.display());
+                total_tokens += token_count;
                 file_count += 1;
-            },
-            Err(e) => eprintln!("Failed to read file {}: {}", path.display(), e),
+            }
+            Err(e) => eprintln!("Error reading file {}: {}", path.display(), e),
         }
     }
-   
+
+    // Print the total token count if more than one file was processed
     if file_count > 1 {
-        println!("{:8} total", total);
+        println!("{:8} total", total_tokens);
     }
 }
 
+// Read the content of a file
 fn read_file(path: &Path) -> io::Result<String> {
     let file = File::open(&path)?;
     let mut buf_reader = BufReader::new(file);
@@ -85,4 +93,3 @@ fn read_file(path: &Path) -> io::Result<String> {
     buf_reader.read_to_string(&mut content)?;
     Ok(content)
 }
-
